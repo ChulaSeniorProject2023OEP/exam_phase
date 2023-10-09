@@ -10,6 +10,12 @@ mp_drawing = mp.solutions.drawing_utils
 
 drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
 
+# Initial threshold values
+left_threshold = -5
+right_threshold = 5
+
+print("Press 'l' to set the current angle as left threshold, 'r' for right threshold. Press ESC to exit.")
+
 cap = cv2.VideoCapture(0)
 
 if not cap.isOpened():
@@ -78,13 +84,13 @@ while cap.isOpened():
             z = angles[2] * 360
 
             #see where the user's head tilting
-            if y < -10:
+            if y < left_threshold:
                 text = "Looking Left"
-            elif y > 10:
+            elif y > right_threshold:
                 text = "Looking Right"
-            elif x < -10:
+            elif x < -2:
                 text = "Looking Down"
-            elif x > 10:
+            elif x > 5:
                 text = "Looking Up"
             else:
                 text = "Forward"
@@ -98,14 +104,14 @@ while cap.isOpened():
 
             #Add text on the image
             cv2.putText(image, text, (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 2)
-            cv2.putText(image, "x: "+str(np.round(x, 2)), (500, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 1)
-            cv2.putText(image, "y: "+str(np.round(y, 2)), (500, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 1)
-            cv2.putText(image, "z: "+str(np.round(z, 2)), (500, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 1)
+            cv2.putText(image, "x: "+str(np.round(x, 2)), (500, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1)
+            cv2.putText(image, "y: "+str(np.round(y, 2)), (500, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1)
+            cv2.putText(image, "z: "+str(np.round(z, 2)), (500, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1)
 
         end = time.time()
         total_time = end - start
         fps = 1/total_time
-        print("FPS: ", fps)
+        #print("FPS: ", fps)
 
         cv2.putText(image, f'FPS: {int(fps)}', (20, 450), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 2)
 
@@ -116,9 +122,16 @@ while cap.isOpened():
             landmark_drawing_spec = drawing_spec,
             connection_drawing_spec = drawing_spec
         )
-    cv2.imshow('Head Pose Estimatin', image)
-
-    if cv2.waitKey(5) & 0xFF == 27:
+    cv2.imshow('Head Pose Estimation', image)
+    key = cv2.waitKey(5)
+    print(key)
+    if key == ord('l'):
+        left_threshold = y
+        print(f"Left threshold set to {left_threshold}")
+    elif key == ord('r'):
+        right_threshold = y
+        print(f"Right threshold set to {right_threshold}")
+    elif key == 27:  # ESC key
         break
 
 cap.release()
