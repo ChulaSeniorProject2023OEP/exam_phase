@@ -16,6 +16,14 @@ if not cap.isOpened():
     print("Error: Camera not found or could not be opened.")
     exit()
 
+def compute_eye_center(landmarks, eye_indices):
+    x_coords = [landmarks[i].x for i in eye_indices]
+    y_coords = [landmarks[i].y for i in eye_indices]
+    return sum(x_coords) / len(eye_indices), sum(y_coords) / len(eye_indices)
+
+left_eye_indices = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
+right_eye_indices = [362, 398, 384, 385, 386, 387, 388, 374, 390, 249, 373, 380, 381, 382, 362, 466]
+
 while cap.isOpened():
     success, image = cap.read()
     if not success:
@@ -78,16 +86,17 @@ while cap.isOpened():
             z = angles[2] * 360
 
             #see where the user's head tilting
-            if y < -10:
+            if y < -5:
                 text = "Looking Left"
-            elif y > 10:
+            elif y > 5:
                 text = "Looking Right"
-            elif x < -10:
+            elif x < -3:
                 text = "Looking Down"
-            elif x > 10:
+            elif x > 5:
                 text = "Looking Up"
             else:
                 text = "Forward"
+            
             #display the nose direction
             nose_3d_projection, jacobian = cv2.projectPoints(nose_3d, rot_vec, trans_vec, cam_matrix, dist_matrix)
 
@@ -98,9 +107,18 @@ while cap.isOpened():
 
             #Add text on the image
             cv2.putText(image, text, (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 2)
-            cv2.putText(image, "x: "+str(np.round(x, 2)), (500, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 1)
-            cv2.putText(image, "y: "+str(np.round(y, 2)), (500, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 1)
-            cv2.putText(image, "z: "+str(np.round(z, 2)), (500, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 1)
+            cv2.putText(image, "x: "+str(np.round(x, 2)), (500, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1)
+            cv2.putText(image, "y: "+str(np.round(y, 2)), (500, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1)
+            cv2.putText(image, "z: "+str(np.round(z, 2)), (500, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1)
+
+            
+            # Calculate eye centers
+            left_eye_center = compute_eye_center(face_landmarks.landmark, left_eye_indices)
+            right_eye_center = compute_eye_center(face_landmarks.landmark, right_eye_indices)
+
+            # Draw the center of each eye region on the image
+            cv2.circle(image, (int(left_eye_center[0] * img_w), int(left_eye_center[1] * img_h)), 5, (0, 0, 255), -1)
+            cv2.circle(image, (int(right_eye_center[0] * img_w), int(right_eye_center[1] * img_h)), 5, (0, 0, 255), -1)
 
         end = time.time()
         total_time = end - start
@@ -116,9 +134,10 @@ while cap.isOpened():
             landmark_drawing_spec = drawing_spec,
             connection_drawing_spec = drawing_spec
         )
-    cv2.imshow('Head Pose Estimatin', image)
+    cv2.imshow('Head Pose Estimation', image)
 
     if cv2.waitKey(5) & 0xFF == 27:
         break
 
-cap.release()
+cap.release() 
+cv2.destroyAllWindows()  # Close any OpenCV windows
