@@ -26,24 +26,41 @@ y = np.array(y)
 
 from sklearn.model_selection import train_test_split
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.5, random_state=42)
 
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC  # Support Vector Machine
+from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeClassifier
 
-# Initialize the model
-clf = RandomForestClassifier()
+
+# Initialize different models
+models = {
+    "RandomForest": RandomForestClassifier(),
+    "SVM": SVC(),
+    "LogisticRegression": LogisticRegression(),
+    "KNN": KNeighborsClassifier(),
+    "DecisionTree": DecisionTreeClassifier()
+}
 
 # Flatten the images for RandomForest
 X_train_flat = X_train.reshape(X_train.shape[0], -1)
 X_test_flat = X_test.reshape(X_test.shape[0], -1)
 
-# Train the model
-clf.fit(X_train_flat, y_train)
-
-# Predict on test data
-y_pred = clf.predict(X_test_flat)
-
 from sklearn.metrics import accuracy_score, classification_report
+
+# Dictionary to hold accuracy scores
+accuracy_scores = {}
+
+# Train and evaluate each model
+for name, model in models.items():
+    model.fit(X_train_flat, y_train)
+    y_pred = model.predict(X_test_flat)
+    accuracy = accuracy_score(y_test, y_pred)
+    accuracy_scores[name] = accuracy
+    print(f"{name} Accuracy: {accuracy}")
+    print(classification_report(y_test, y_pred))
 
 print("Accuracy:", accuracy_score(y_test, y_pred))
 print(classification_report(y_test, y_pred))

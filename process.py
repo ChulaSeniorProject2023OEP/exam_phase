@@ -1,8 +1,8 @@
-import pandas as pd
 import cv2
-import mediapipe as mp
 import numpy as np
+import mediapipe as mp
 import os
+import pandas as pd
 
 # Create a directory to save the frames if it doesn't exist
 frames_dir = 'extracted_frames'
@@ -13,126 +13,84 @@ mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
 # Define threshold values for yaw and pitch
-# yaw_threshold = 25   # degrees, adjust based on your requirement
-# pitch_threshold = 15 # degrees, adjust based on your requirement
+yaw_threshold = 30   # degrees
+pitch_threshold = 15 # degrees
 
-# Intervals (start_time, end_time, cheat_type)
-cheating_intervals = [
-    (135, 204, 1),
-    (205, 220, 1),
-    (221, 223, 2),
-    (226, 244, 2),
-    (252, 302, 2),
-    (505, 517, 5),
-    (519, 532, 5),
-    (535, 536, 5),
-    (544, 547, 5),
-    (607, 649, 1),
-    (1245, 1257, 1),
-    (1316, 1339, 6),
-    (324, 3350, 3),
-    (930, 1013, 3),
-    (1024, 1054, 3)
-
-
-   
-]
-frame_rate = 10
-
-# Convert time intervals to frame intervals
-frame_intervals = [(int(start * frame_rate), int(end * frame_rate), cheat_type) for start, end, cheat_type in cheating_intervals]
-
-def estimate_head_pose(frame):
-    img_h, img_w, _ = frame.shape
+def estimate_head_pose(frame, img_w, img_h):
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = face_mesh.process(frame_rgb)
 
-    # Define the 3D model points of a generic human face
-    model_points = np.array([
-        (0.0, 0.0, 0.0),             # Nose tip
-        (0.0, -330.0, -65.0),        # Chin
-        (-225.0, 170.0, -135.0),     # Left eye left corner
-        (225.0, 170.0, -135.0),      # Right eye right corne
-        (-150.0, -150.0, -125.0),    # Left Mouth corner
-        (150.0, -150.0, -125.0)      # Right mouth corner
-    ])
-
     if results.multi_face_landmarks:
         for face_landmarks in results.multi_face_landmarks:
-            # Extract landmarks for head pose estimation
-            face_2d = np.array([
-                (face_landmarks.landmark[1].x * img_w, face_landmarks.landmark[1].y * img_h),  # Nose tip
-                (face_landmarks.landmark[152].x * img_w, face_landmarks.landmark[152].y * img_h),  # Chin
-                (face_landmarks.landmark[226].x * img_w, face_landmarks.landmark[226].y * img_h),  # Left eye left corner
-                (face_landmarks.landmark[446].x * img_w, face_landmarks.landmark[446].y * img_h),  # Right eye right corner
-                (face_landmarks.landmark[57].x * img_w, face_landmarks.landmark[57].y * img_h),  # Left Mouth corner
-                (face_landmarks.landmark[287].x * img_w, face_landmarks.landmark[287].y * img_h),  # Right mouth corner
-            ], dtype="double")
+            face_2d = [(face_landmarks.landmark[i].x * img_w, face_landmarks.landmark[i].y * img_h) for i in [1, 152, 226, 446, 57, 287]]
+            face_3d = [(0.0, 0.0, 0.0), (0.0, -330.0, -65.0), (-225.0, 170.0, -135.0), (225.0, 170.0, -135.0), (-150.0, -150.0, -125.0), (150.0, -150.0, -125.0)]
 
-            # Camera matrix and distortion coefficients
-            focal_length = img_w
-            center = (img_w / 2, img_h / 2)
-            cam_matrix = np.array([[focal_length, 0, center[0]],
-                                   [0, focal_length, center[1]],
-                                   [0, 0, 1]], dtype="double")
-            dist_matrix = np.zeros((4, 1), dtype="double")
+            # Convert lists to numpy arrays and reshape
+            face_2d = np.array(face_2d, dtype=np.float64)
+            face_3d = np.array(face_3d, dtype=np.float64).reshape(-1, 3)  # Reshape to Nx3
 
-            # Solve PnP
-            success, rot_vec, trans_vec = cv2.solvePnP(model_points, face_2d, cam_matrix, dist_matrix)
+            cam_matrix = np.array([[img_w, 0, img_w/2], [0, img_w, img_h/2], [0, 0, 1]], dtype='double')
+            dist_matrix = np.zeros((4, 1), dtype='double')
 
-            # Convert rotation vector to rotation matrix
+            success, rot_vec, trans_vec = cv2.solvePnP(face_3d, face_2d, cam_matrix, dist_matrix)
             rmat, jac = cv2.Rodrigues(rot_vec)
-
-            # Calculate Euler angles
             angles, mtxR, mtxQ, Qx, Qy, Qz = cv2.RQDecomp3x3(rmat)
 
-            # Convert to degrees
-            x_angle = angles[0] * 360
-            y_angle = angles[1] * 360
-            z_angle = angles[2] * 360
+            x_angle = np.degrees(angles[0])
+            y_angle = np.degrees(angles[1])
+            z_angle = np.degrees(angles[2])
 
             return {'yaw': y_angle, 'pitch': x_angle, 'roll': z_angle}
-
+    
     return None
 
-def extract_and_label_frames(video_path, frame_intervals, interval=1):
+
+def extract_and_label_frames(video_path, interval=30, display_video=False):
     frames = []
     labels = []
     vidcap = cv2.VideoCapture(video_path)
-    frame_rate = vidcap.get(cv2.CAP_PROP_FPS)
-    
     success, image = vidcap.read()
-    frame_count = 0
+    count = 0
 
     while success:
-        # Label the frame based on cheating intervals
-        label = 'not_cheating'
-        for start_frame, end_frame, cheat_type in frame_intervals:
-            if start_frame <= frame_count <= end_frame:
-                label = f'cheating_type_{cheat_type}'
-                break
+        if count % interval == 0:
+            img_h, img_w, _ = image.shape
+            head_pose = estimate_head_pose(image, img_w, img_h)
+            if head_pose:
+                # Display video with head pose angles if enabled
+                if display_video:
+                    cv2.putText(image, f"Yaw: {head_pose['yaw']:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                    cv2.putText(image, f"Pitch: {head_pose['pitch']:.2f}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                    cv2.putText(image, f"Roll: {head_pose['roll']:.2f}", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                    cv2.imshow("Video", image)
+                    if cv2.waitKey(1) & 0xFF == ord('q'):  # Exit if 'q' is pressed
+                        break
 
-        if frame_count % interval == 0:
-            frames.append(image)
-            labels.append(label)
-        
+                frames.append(image)
+                is_cheating = (head_pose['yaw'] < -1439 or head_pose['yaw'] > 2000) or (head_pose['pitch'] < -9000 or head_pose['pitch'] > -7000)
+                label = 'cheating' if is_cheating else 'not_cheating'
+                labels.append(label)
+
         success, image = vidcap.read()
-        frame_count += 1
+        count += 1
 
     vidcap.release()
+    cv2.destroyAllWindows()
     return frames, labels
 
-video_paths = ['Yousef1.mp4']
+# Process videos and generate dataset
+video_paths = ['Yousef1.mp4','Jourabloo1.mp4','XiYin1.mp4','meowseph1.mp4']
 dataset = []
 frame_id = 0
 
 for video_path in video_paths:
-    frames, labels = extract_and_label_frames(video_path, frame_intervals)
+    frames, labels = extract_and_label_frames(video_path, display_video=True)
     for frame, label in zip(frames, labels):
         frame_path = os.path.join(frames_dir, f'frame_{frame_id}.jpg')
         cv2.imwrite(frame_path, frame)
         dataset.append((frame_path, label))
         frame_id += 1
 
+# Convert to DataFrame and save
 df = pd.DataFrame(dataset, columns=['frame_path', 'label'])
 df.to_csv('dataset.csv', index=False)
