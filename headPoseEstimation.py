@@ -208,7 +208,7 @@ while cap.isOpened():
         cheating_type = ""  # Initialize an empty string for cheating type
 
         if predicted_class == 1:
-            cheating_text = "Cheating Type 1"
+            cheating_text = "Cheating"
             cheating_type = "Type 1 (Looking)"
         # elif predicted_class == 2:
         #     cheating_text = "Cheating Type 2"
