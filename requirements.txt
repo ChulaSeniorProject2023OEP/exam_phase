@@ -1,3 +1,5 @@
+#SYSTEM_VERSION_COMPAT=0 pip install tensorflow-macos tensorflow-metal
+#pip install mediapipe
 absl-py==2.0.0
 astunparse==1.6.3
 attrs==23.1.0
@@ -61,6 +63,3 @@ urllib3==2.1.0
 Werkzeug==3.0.1
 wrapt==1.16.0
 zipp==3.17.0
-tensorflow-macos
-tensorflow-metal
-jupyter
