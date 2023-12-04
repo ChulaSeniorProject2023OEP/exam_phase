@@ -5,7 +5,7 @@ import time
 from tensorflow.keras.models import load_model
 
 # Load your cheating detection model
-cheating_detection_model = load_model("BehaviorClassification_v2.h5")
+cheating_detection_model = load_model("BehaviorClassification_Unseen77%.h5")
 # Buffer to store time steps
 time_steps_buffer = []
 
@@ -210,9 +210,9 @@ while cap.isOpened():
         if predicted_class == 1:
             cheating_text = "Cheating Type 1"
             cheating_type = "Type 1 (Looking)"
-        elif predicted_class == 2:
-            cheating_text = "Cheating Type 2"
-            cheating_type = "Type 2 (Talking)"
+        # elif predicted_class == 2:
+        #     cheating_text = "Cheating Type 2"
+        #     cheating_type = "Type 2 (Talking)"
         else:
             cheating_text = "Not Cheating"
         # Display the cheating detection result
