@@ -11,7 +11,7 @@ time_steps_buffer = []
 
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(
-    min_detection_confidence=0.5, min_tracking_confidence=0.5
+    min_detection_confidence=0.5, min_tracking_confidence=0.5, refine_landmarks=True
 )
 
 mp_drawing = mp.solutions.drawing_utils
@@ -33,6 +33,8 @@ def compute_features_based_on_head_pose(image, face_mesh):
 def extract_face_keypoints(results):
     if results.multi_face_landmarks:
         face = [[lm.x, lm.y, lm.z] for lm in results.multi_face_landmarks[0].landmark]
+        # print(f"face: {face}")
+        # print(f"face shape: {np.array(face).shape}")
         return np.array(face).flatten()
     else:
         return np.zeros(468 * 3)  # Assuming 468 landmarks, each with x, y, z
@@ -196,39 +198,39 @@ while cap.isOpened():
         )
 
     # When buffer has 30 time steps, make a prediction
-    if len(time_steps_buffer) == 30:
-        model_input = np.array(time_steps_buffer).reshape(1, 30, 1404)
-        cheating_prediction = cheating_detection_model.predict(model_input)
+    # if len(time_steps_buffer) == 30:
+    #     model_input = np.array(time_steps_buffer).reshape(1, 30, 1404)
+    #     cheating_prediction = cheating_detection_model.predict(model_input)
 
-        # Correctly process the cheating_prediction
-        print(f"cheating prediction results: ", cheating_prediction)
-        predicted_class = np.argmax(cheating_prediction, axis=1)[
-            0
-        ]  # Get the predicted class index
-        cheating_type = ""  # Initialize an empty string for cheating type
+    #     # Correctly process the cheating_prediction
+    #     print(f"cheating prediction results: ", cheating_prediction)
+    #     predicted_class = np.argmax(cheating_prediction, axis=1)[
+    #         0
+    #     ]  # Get the predicted class index
+    #     cheating_type = ""  # Initialize an empty string for cheating type
 
-        if predicted_class == 1:
-            cheating_text = "Cheating"
-            cheating_type = "Type 1 (Looking)"
-        # elif predicted_class == 2:
-        #     cheating_text = "Cheating Type 2"
-        #     cheating_type = "Type 2 (Talking)"
-        else:
-            cheating_text = "Not Cheating"
-        # Display the cheating detection result
-        cv2.putText(
-            image, cheating_text, (20, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2
-        )
-        if cheating_type:
-            cv2.putText(
-                image,
-                cheating_type,
-                (20, 150),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                1,
-                (0, 0, 255),
-                2,
-            )
+    #     if predicted_class == 1:
+    #         cheating_text = "Cheating"
+    #         cheating_type = "Test Taker is Cheating"
+    #     # elif predicted_class == 2:
+    #     #     cheating_text = "Cheating Type 2"
+    #     #     cheating_type = "Type 2 (Talking)"
+    #     else:
+    #         cheating_text = "Not Cheating"
+    #     # Display the cheating detection result
+    #     cv2.putText(
+    #         image, cheating_text, (20, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2
+    #     )
+    #     if cheating_type:
+    #         cv2.putText(
+    #             image,
+    #             cheating_type,
+    #             (20, 150),
+    #             cv2.FONT_HERSHEY_SIMPLEX,
+    #             1,
+    #             (0, 0, 255),
+    #             2,
+    #         )
 
     cv2.imshow("Head Pose Estimation", image)
     if cv2.waitKey(5) & 0xFF == 27:
