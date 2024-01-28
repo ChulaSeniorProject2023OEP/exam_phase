@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "exam-phase"
+version = "0.1.0"
+description = ""
+authors = ["SarmKunatham <tothemarsplanet@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+opencv-python = "^4.9.0.80"
+numpy = "^1.26.3"
+scikit-learn = "^1.4.0"
+pandas = "^2.2.0"
+matplotlib = "^3.8.2"
+mediapipe = "^0.10.9"
+tqdm = "^4.66.1"
+natsort = "^8.4.0"
+torch = "^2.1.2"
+torchvision = "^0.16.2"
+torchaudio = "^2.1.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
