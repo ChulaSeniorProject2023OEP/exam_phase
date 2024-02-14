@@ -3,7 +3,13 @@ import mediapipe as mp
 import numpy as np
 from constants import CHIN_INDEX, LEFT_MOUTH_CORNER_INDEX, LOWER_LIP_INDEX, NOSE_TIP_INDEX, LEFT_EYE_INDEX, RIGHT_EYE_INDEX, RIGHT_MOUTH_CORNER_INDEX, UPPER_LIP_INDEX
 import time
+import pandas as pd
+import pickle
+import glob
+import scipy.io as sio
+import warnings
 
+warnings.filterwarnings("ignore")
 
 class FacialFeatureExtractor:
     """
@@ -50,6 +56,9 @@ class FacialFeatureExtractor:
         self.distortion_matrix = None
         self.mouth_opening_distances = []
         self.TALKING_THRESHOLD = 0.02
+        self.head_pose_estimation_model_path = '../Head-Pose-Estimation/model.pkl'
+        self.head_pose_estimation_model = pickle.load(open(self.head_pose_estimation_model_path, 'rb'))
+        print(f"Head pose estimation model loaded: {self.head_pose_estimation_model}")
 
     def process_frame(self, frame):
         """
