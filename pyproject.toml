@@ -20,6 +20,7 @@ torchvision = "^0.16.2"
 torchaudio = "^2.1.2"
 streamlit = "^1.31.0"
 watchdog = "^3.0.0"
+moviepy = "^1.0.3"
 
 
 [build-system]
