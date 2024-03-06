@@ -167,3 +167,4 @@ dataset/
 OEP_database/
 *AFLW2000/
 dataset/*
+data/*
