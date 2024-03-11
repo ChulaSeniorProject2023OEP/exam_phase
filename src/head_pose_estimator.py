@@ -1,114 +1,133 @@
-import mediapipe as mp
-import time
 import cv2
 import numpy as np
 import pandas as pd
 import pickle
+import logging
+
+from constants import (CHIN_INDEX, DEFAULT_HEAD_POSE_MODEL_PATH, 
+                        FOREHEAD_INDEX, LEFT_EYE_INDEX, LEFT_MOUTH_CORNER_INDEX, 
+                        NOSE_TIP_INDEX, RIGHT_EYE_INDEX, RIGHT_MOUTH_CORNER_INDEX)
+from mediapipe_face_mesh_detector import MediapipeFaceMeshDetector
 
 class HeadPoseEstimator:
-    """
-    Class for estimating head pose using facial landmarks.
-
-    Args:
-        model_path (str): Path to the head pose estimation model (default: 'src/model/head_pose_model/model.pkl')
+    '''
+    A class to estimate head pose angles (pitch, yaw, roll) using facial landmarks identified in images. 
+    Utilizes a pretrained model for the estimation.
 
     Attributes:
-        model (object): Head pose estimation model
-        cols (list): List of feature column names
-        threshold (float): Threshold for classifying the head pose
+        model_path (str): Path to the serialized head pose estimation model.
+        vertical_threshold (float): The vertical movement classification threshold.
+        horizontal_threshold (float): The horizontal movement classification threshold.
+        model (pickle.Pickle): Loaded model for head pose estimation.
+        feature_columns (list): Names of the feature columns for the model.
+    '''
 
-    Methods:
-        extract_features: Extracts facial landmarks from an image
-        normalize: Normalizes the extracted features
-        draw_axes: Draws 3D axes on an image based on the estimated head pose
-        predict: Predicts the head pose angles (pitch, yaw, roll) based on the normalized features
-        run: Runs the head pose estimation in real-time using the computer's camera
-    """
-
-    def __init__(self, model_path='src/model/head_pose_model/model.pkl'):
-        self.model = pickle.load(open(model_path, 'rb'))
-        self.cols = []
-        self.threshold = 0.3
-        for pos in ['nose_', 'forehead_', 'left_eye_', 'mouth_left_', 'chin_', 'right_eye_', 'mouth_right_']:
-            for dim in ('x', 'y'):
-                self.cols.append(pos + dim)
-        self.face_mesh = mp.solutions.face_mesh.FaceMesh(
-            max_num_faces=1,
-            refine_landmarks=True,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
-            )
-
-    def extract_features(self, img):
-        """
-        Extracts facial landmarks from an image.
-
+    def __init__(self, model_path=DEFAULT_HEAD_POSE_MODEL_PATH, vertical_threshold=0.3, horizontal_threshold=0.5):
+        '''
+        Initialize the head pose estimator
+        
         Args:
-            img (numpy.ndarray): Input image
+            model_path (str): Path to the trained head pose estimation model.
+            vertical_threshold (float): Threshold for classifying vertical head movement (looking up/down).
+            horizontal_threshold (float): Threshold for classifying horizontal head movement (looking left/right).
+        '''
+        self.model = pickle.load(open(model_path, 'rb'))
+        self.vertical_threshold = vertical_threshold
+        self.horizontal_threshold = horizontal_threshold
+        self.feature_columns = [f"{pos}{dim}" for pos in ['nose_', 'forehead_', 'left_eye_', 'mouth_left_', 'chin_', 'right_eye_', 'mouth_right_']  
+                                for dim in ['x', 'y']]
+    
+    def extract_head_pose_features(self, mediapipe_result):
+        '''
+        Extracts relevant facial landmark features for head pose estimation from a MediaPipe FaceMesh result.
+
+        Parameters:
+            mediapipe_result (mediapipe.framework.formats.landmark_pb2.NormalizedLandmarkList): 
+                The facial landmarks detected by MediaPipe.
 
         Returns:
-            list: List of extracted facial landmarks
-        """
-        NOSE = 1
-        FOREHEAD = 10
-        LEFT_EYE = 33
-        MOUTH_LEFT = 61
-        CHIN = 199
-        RIGHT_EYE = 263
-        MOUTH_RIGHT = 291
-
-        result = self.face_mesh.process(img)
+            list: Extracted facial landmark features relevant for head pose estimation.
+        '''
         face_features = []
-        
-        if result.multi_face_landmarks is not None:
-            for face_landmarks in result.multi_face_landmarks:
+        if mediapipe_result.multi_face_landmarks is not None:
+            for face_landmarks in mediapipe_result.multi_face_landmarks:
                 for idx, lm in enumerate(face_landmarks.landmark):
-                    if idx in [FOREHEAD, NOSE, MOUTH_LEFT, MOUTH_RIGHT, CHIN, LEFT_EYE, RIGHT_EYE]:
+                    if idx in [FOREHEAD_INDEX, NOSE_TIP_INDEX, LEFT_MOUTH_CORNER_INDEX, RIGHT_MOUTH_CORNER_INDEX, CHIN_INDEX, LEFT_EYE_INDEX, RIGHT_EYE_INDEX]:
                         face_features.append(lm.x)
-                        face_features.append(lm.y)
-
+                        face_features.append(lm.y) 
         return face_features
 
-    def normalize(self, poses_df):
-        """
-        Normalizes the extracted features.
+    def normalize(self, face_features_df):
+        '''
+        Normalizes facial landmark features for head pose estimation.
 
-        Args:
-            poses_df (pandas.DataFrame): DataFrame containing the extracted features
+        Parameters:
+            face_features_df (pandas.DataFrame): DataFrame containing facial landmark features.
 
         Returns:
-            pandas.DataFrame: Normalized DataFrame
-        """
-        normalized_df = poses_df.copy()
+            pandas.DataFrame: Normalized feature DataFrame.
+        '''
         
+        face_features_normalized_df = face_features_df.copy()
         for dim in ['x', 'y']:
             for feature in ['forehead_'+dim, 'nose_'+dim, 'mouth_left_'+dim, 'mouth_right_'+dim, 'left_eye_'+dim, 'chin_'+dim, 'right_eye_'+dim]:
-                normalized_df[feature] = poses_df[feature] - poses_df['nose_'+dim]
+                face_features_normalized_df[feature] = face_features_df[feature] - face_features_df['nose_'+dim]
                 
-            diff = normalized_df['mouth_right_'+dim] - normalized_df['left_eye_'+dim]
+            diff = face_features_normalized_df['mouth_right_'+dim] - face_features_normalized_df['left_eye_'+dim]
             for feature in ['forehead_'+dim, 'nose_'+dim, 'mouth_left_'+dim, 'mouth_right_'+dim, 'left_eye_'+dim, 'chin_'+dim, 'right_eye_'+dim]:
-                normalized_df[feature] = normalized_df[feature] / diff
+                face_features_normalized_df[feature] = face_features_normalized_df[feature] / diff
         
-        return normalized_df
+        return face_features_normalized_df
 
-    def draw_axes(self, img, pitch, yaw, roll, tx, ty, size=50):
-        """
-        Draws 3D axes on an image based on the estimated head pose.
+    def predict_head_pose(self, face_features_normalized_df):
+        '''
+        Predicts head pose angles using the normalized facial features.
 
-        Args:
-            img (numpy.ndarray): Input image
-            pitch (float): Estimated pitch angle
-            yaw (float): Estimated yaw angle
-            roll (float): Estimated roll angle
-            tx (float): X-coordinate of the nose landmark
-            ty (float): Y-coordinate of the nose landmark
-            size (int): Size of the axes (default: 50)
+        Parameters:
+            face_features_normalized_df (pandas.DataFrame): DataFrame of normalized facial features.
 
         Returns:
-            numpy.ndarray: Image with 3D axes drawn
-        """
-        yaw = -yaw
-        rotation_matrix = cv2.Rodrigues(np.array([pitch, yaw, roll]))[0].astype(np.float64)
+            dict: Predicted head pose angles (pitch, yaw, roll) and classification.
+        '''
+        pitch_pred, yaw_pred, roll_pred = self.model.predict(face_features_normalized_df).ravel()
+        classify_text = self._classify_movement(pitch_pred, yaw_pred)
+        output = {'pitch': pitch_pred, 'yaw': yaw_pred, 'roll': roll_pred, 'classify': classify_text}
+        logging.info(f'Head Pose: {output}')
+        return output
+    
+    def _classify_movement(self, pitch, yaw):
+        '''
+        Classifies head movement based on predicted pitch and yaw angles.
+        
+        Parameters:
+            pitch (float): Predicted pitch angle.
+            yaw (float): Predicted yaw angle.
+        
+        Returns:
+            str: Classification of head movement.
+        '''
+        if pitch > self.vertical_threshold:
+            return 'Top' + (' Left' if yaw > self.horizontal_threshold else ' Right' if yaw < -self.horizontal_threshold else '')
+        elif pitch < -self.vertical_threshold:
+            return 'Bottom' + (' Left' if yaw > self.horizontal_threshold else ' Right' if yaw < -self.horizontal_threshold else '')
+        return 'Left' if yaw > self.horizontal_threshold else 'Right' if yaw < -self.horizontal_threshold else 'Forward'
+    
+    def draw_axes(self, img, output, tx, ty, size=50):
+        '''
+        Draws 3D axes on the image to visualize estimated head pose.
+
+        Parameters:
+            img (numpy.ndarray): The image to draw axes on.
+            output (dict): Contains predicted pitch, yaw, and roll angles.
+            tx (int): X-coordinate for the origin of the axes (typically nose_x).
+            ty (int): Y-coordinate for the origin of the axes (typically nose_y).
+            size (int): Length of the axes lines.
+        
+        Returns:
+            numpy.ndarray: Image with 3D axes drawn.
+        '''
+        output['yaw'] = -output['yaw']
+        rotation_matrix = cv2.Rodrigues(np.array([output['pitch'], output['yaw'], output['roll']]))[0].astype(np.float64)
         axes_points = np.array([
             [1, 0, 0, 0],
             [0, 1, 0, 0],
@@ -125,81 +144,40 @@ class HeadPoseEstimator:
         cv2.line(new_img, tuple(axes_points[:, 3].ravel()), tuple(axes_points[:, 2].ravel()), (0, 0, 255), 3)
         return new_img
 
-    def predict(self, face_features_df):
-        """
-        Predicts the head pose angles (pitch, yaw, roll) based on the normalized features.
-
-        Args:
-            face_features_df (pandas.DataFrame): DataFrame containing the normalized features
-
-        Returns:
-            tuple: Predicted pitch, yaw, and roll angles
-        """
-        pitch_pred, yaw_pred, roll_pred = self.model.predict(face_features_df).ravel()
-        return pitch_pred, yaw_pred, roll_pred
-
-    def run(self):
-        """
-        Runs the head pose estimation in real-time using the computer's camera.
-        """
-        cap = cv2.VideoCapture(0)  # From Camera
-        while(cap.isOpened()):
-            ret, img = cap.read()
-            start = time.time()
-            if ret:
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                img = cv2.flip(img, 1)
-                img_h, img_w, img_c = img.shape
-                text = ''
-                
-                face_features = self.extract_features(img)
-                if len(face_features):
-                    face_features_df = pd.DataFrame([face_features], columns=self.cols)
-                    face_features_normalized = self.normalize(face_features_df)
-                    pitch_pred, yaw_pred, roll_pred = self.predict(face_features_normalized)
-                    nose_x = face_features_df['nose_x'].values * img_w
-                    nose_y = face_features_df['nose_y'].values * img_h
-                    img = self.draw_axes(img, pitch_pred, yaw_pred, roll_pred, nose_x, nose_y)
-                                    
-                    if pitch_pred > self.threshold:
-                        text = 'Top'
-                        if yaw_pred > self.threshold:
-                            text = 'Top Left'
-                        elif yaw_pred < -self.threshold:
-                            text = 'Top Right'
-                    elif pitch_pred < -self.threshold:
-                        text = 'Bottom'
-                        if yaw_pred > self.threshold:
-                            text = 'Bottom Left'
-                        elif yaw_pred < -self.threshold:
-                            text = 'Bottom Right'
-                    elif yaw_pred > self.threshold:
-                        text = 'Left'
-                    elif yaw_pred < -self.threshold:
-                        text = 'Right'
-                    else:
-                        text = 'Forward'
-                    cv2.putText(img, f'Pitch: {pitch_pred:.2f}', (25, 125), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-                    cv2.putText(img, f'Yaw: {yaw_pred:.2f}', (25, 175), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-                    cv2.putText(img, f'Roll: {roll_pred:.2f}', (25, 225), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-                        
-                cv2.putText(img, text, (25, 75), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-
-                img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-                end = time.time()
-                fps = 1 / (end - start)
-                cv2.putText(img, f'FPS: {int(fps)}', (25, 25), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-                
-                cv2.imshow('img', img)
-                k = cv2.waitKey(1) & 0xFF
-                if k == ord("q"):
-                    break
-            else:
-                break
-
-        cv2.destroyAllWindows()
-        cap.release()
-
 if __name__ == "__main__":
+    # Configure logging
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
     head_pose_estimator = HeadPoseEstimator()
-    head_pose_estimator.run()
+    face_mesh_detector = MediapipeFaceMeshDetector()
+    
+    cap = cv2.VideoCapture(0)  # From Camera
+    while(cap.isOpened()):
+        success, image = cap.read()
+        if not success:
+            logging.error("Error reading from camera, Exiting...")
+            break
+        
+        image = cv2.flip(image, 1)
+        image_h, image_w, _ = image.shape
+        
+        mediapipe_result = face_mesh_detector.detect_landmarks(image)
+        face_features = head_pose_estimator.extract_head_pose_features(mediapipe_result)
+        if len(face_features):
+            face_features_df = pd.DataFrame([face_features], columns=head_pose_estimator.feature_columns)
+            face_features_normalized_df = head_pose_estimator.normalize(face_features_df)
+            head_pose = head_pose_estimator.predict_head_pose(face_features_normalized_df)
+            nose_x = face_features_df['nose_x'].values[0] * image_w
+            nose_y = face_features_df['nose_y'].values[0] * image_h
+            image = head_pose_estimator.draw_axes(image, head_pose, nose_x, nose_y)
+            
+            cv2.putText(image, f'Pitch: {head_pose["pitch"]:.2f}', (25, 125), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+            cv2.putText(image, f'Yaw: {head_pose["yaw"]:.2f}', (25, 175), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+            cv2.putText(image, f'Roll: {head_pose["roll"]:.2f}', (25, 225), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+            cv2.putText(image, f'Classify: {head_pose["classify"]}', (25, 275), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        
+        cv2.imshow('Head Pose Estimation', image)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+    
+    cap.release()
+    cv2.destroyAllWindows()

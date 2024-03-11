@@ -1,6 +1,3 @@
-from tkinter import RIGHT
-
-
 NOSE_TIP_INDEX = 1  # Tip of the nose
 CHIN_INDEX = 199  # Chin
 LEFT_EYE_INDEX = 33  # Left eye
@@ -28,3 +25,5 @@ RIGHT_EYE_IRIS_LANDMARKS = [
     473, 474, 475, 476, 477
 ]
 RIGHT_EYE_BOUNDARY_LANDMARKS = list(set(RIGHT_EYE_LANDMARKS) - set(RIGHT_EYE_IRIS_LANDMARKS))
+
+DEFAULT_HEAD_POSE_MODEL_PATH = 'src/models/head_pose_model/LGBM_finetune_v_optuna.pkl'
