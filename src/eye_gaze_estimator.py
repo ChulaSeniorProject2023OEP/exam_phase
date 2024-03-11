@@ -1,38 +1,74 @@
-import mediapipe as mp
 import cv2
 import numpy as np
+import logging
+import pandas as pd
 
-# Assuming constants.py contains predefined lists of landmark indices for eye boundaries and irises.
-from constants import (
-    LEFT_EYE_BOUNDARY_LANDMARKS,
-    LEFT_EYE_IRIS_LANDMARKS,
-    RIGHT_EYE_BOUNDARY_LANDMARKS,
-    RIGHT_EYE_IRIS_LANDMARKS,
-)
+from mediapipe_face_mesh_detector import MediapipeFaceMeshDetector
+from constants import LEFT_EYE_BOUNDARY_LANDMARKS, LEFT_EYE_IRIS_LANDMARKS, LEFT_EYE_OUTER_CORNER_INDEX, LEFT_IRIS_INDEX, NOSE_TIP_INDEX, RIGHT_EYE_BOUNDARY_LANDMARKS, RIGHT_EYE_IRIS_LANDMARKS, RIGHT_EYE_OUTER_CORNER_INDEX, RIGHT_IRIS_INDEX
 
-class GazeEstimator:
+class EyeGazeEstimator:
     """
-    A class for estimating the gaze direction using facial landmarks detected by MediaPipe.
-    It determines if a person is looking straight, left, or right based on the position of the iris
-    relative to the eye corners.
+    Class for estimating eye gaze direction using facial landmarks provided by MediaPipe.
     """
-    def __init__(self):
-        """Initializes MediaPipe FaceMesh model with specific parameters for high accuracy."""
-        self.mp_drawing = mp.solutions.drawing_utils
-        self.mp_face_mesh = mp.solutions.face_mesh
-        self.face_mesh = self.mp_face_mesh.FaceMesh(
-            max_num_faces=1,
-            refine_landmarks=True,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5,
-        )
-
-    def get_normalized_distance(self, landmark1, landmark2):
+    def __init__(self, ratio_threshold=0.35):
         """
-        Calculates the Euclidean distance between two landmarks.
+        Initializes the EyeGazeEstimator.
 
-        Parameters:
-            landmark1, landmark2: The two landmarks between which distance is to be calculated.
+        Args:
+            ratio_threshold: The threshold for determining gaze direction based on 
+                                the distance between the iris and the eye corners.
+        """
+        self.ratio_threshold = ratio_threshold
+        self.feature_columns = [f"{pos}{dim}" for pos in ['nose_', 'left_iris_', 'right_iris_', 'left_eye_outer_corner_', 'right_eye_outer_corner_'] 
+                                for dim in ['x', 'y']]
+    
+    def extract_eye_features(self, mediapipe_result):
+        """
+        Extracts relevant eye landmark coordinates from MediaPipe results.
+
+        Args:
+            mediapipe_result: The output from MediaPipe's face mesh detector.
+
+        Returns:
+            A list of extracted eye landmark coordinates (x, y) or None if no faces are detected.
+        """
+        eye_features = []
+        if mediapipe_result.multi_face_landmarks is not None:
+            for face_landmarks in mediapipe_result.multi_face_landmarks:
+                for idx, lm in enumerate(face_landmarks.landmark):
+                    if idx in [NOSE_TIP_INDEX, LEFT_IRIS_INDEX, RIGHT_IRIS_INDEX, LEFT_EYE_OUTER_CORNER_INDEX, RIGHT_EYE_OUTER_CORNER_INDEX]:
+                        eye_features.append(lm.x)
+                        eye_features.append(lm.y)
+        return eye_features
+
+    def normalize(self, eye_features_df):
+        """
+        Normalizes eye features to make them scale and translation invariant.
+
+        Args:
+            eye_features_df: A Pandas DataFrame containing eye features.
+
+        Returns:
+            A DataFrame containing the normalized eye features.
+        """
+        eye_features_normalized_df = eye_features_df.copy()
+        for dim in ['x', 'y']:
+            for feature in ['nose_'+dim, 'left_iris_'+dim, 'right_iris_'+dim, 'left_eye_outer_corner_'+dim, 'right_eye_outer_corner_'+dim]:
+                eye_features_normalized_df[feature] = eye_features_df[feature] - eye_features_df['nose_'+dim]
+            
+            diff = (eye_features_normalized_df['right_eye_outer_corner_'+dim] - eye_features_normalized_df['left_eye_outer_corner_'+dim]) / 2
+            for feature in ['nose_'+dim, 'left_iris_'+dim, 'right_iris_'+dim, 'left_eye_outer_corner_'+dim, 'right_eye_outer_corner_'+dim]:
+                eye_features_normalized_df[feature] = eye_features_normalized_df[feature] / diff
+        
+        return eye_features_normalized_df
+    
+    def get_landmark_distance(self, landmark1, landmark2):
+        """
+        Calculates the Euclidean distance between two facial landmarks.
+
+        Args:
+            landmark1: The first landmark.
+            landmark2: The second landmark.
 
         Returns:
             The Euclidean distance between the two landmarks.
@@ -40,124 +76,115 @@ class GazeEstimator:
         dx = landmark1.x - landmark2.x
         dy = landmark1.y - landmark2.y
         return np.sqrt(dx * dx + dy * dy)
+    
+    def predict_eye_gaze(self, eye_features_normalized_df):
+            '''
+            Predicts the direction of eye gaze based on the normalized eye features.
 
-    def detect_gaze_direction(self, img, face_landmarks):
-        """
-        Determines the gaze direction by analyzing the position of the iris within the eye.
+            Parameters:
+            eye_features_normalized_df (DataFrame): A DataFrame containing the normalized eye features.
 
-        Parameters:
-            img: The image frame from the video capture.
-            face_landmarks: The facial landmarks detected by MediaPipe.
+            Returns:
+            dict: A dictionary containing the eye gaze prediction and related information.
 
-        Returns:
-            A string indicating the detected behavior ("Looking Away" or "Focused").
-        """
-        # Extract landmarks for the iris centers and eye corners.
-        left_iris_center = face_landmarks.landmark[468]
-        right_iris_center = face_landmarks.landmark[473]
-        left_eye_outer_corner = face_landmarks.landmark[33]  
-        left_eye_inner_corner = face_landmarks.landmark[133]  
-        right_eye_outer_corner = face_landmarks.landmark[263] 
-        right_eye_inner_corner = face_landmarks.landmark[362] 
-
-        # Calculate the horizontal ratio to determine gaze direction.
-        left_eye_horizontal_ratio = self.get_normalized_distance(left_iris_center, left_eye_outer_corner) / \
-            (self.get_normalized_distance(left_iris_center, left_eye_outer_corner) +
-             self.get_normalized_distance(left_iris_center, left_eye_inner_corner))
-
-        right_eye_horizontal_ratio = self.get_normalized_distance(right_iris_center, right_eye_outer_corner) / \
-            (self.get_normalized_distance(right_iris_center, right_eye_outer_corner) +
-             self.get_normalized_distance(right_iris_center, right_eye_inner_corner))
-
-        # Annotate the image with the ratio for debugging and visualization.
-        cv2.putText(img, f"Left eye horizontal ratio: {left_eye_horizontal_ratio:.2f}", (10, 200),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-        cv2.putText(img, f"Right eye horizontal ratio: {right_eye_horizontal_ratio:.2f}", (10, 250),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-
-        # Determine gaze direction based on the ratio.
-        left_gaze = "Straight" if np.isclose(left_eye_horizontal_ratio, 0.5, atol=0.1) else \
-                    ("Left" if left_eye_horizontal_ratio < 0.5 else "Right")
-        right_gaze = "Straight" if np.isclose(right_eye_horizontal_ratio, 0.5, atol=0.1) else \
-                     ("Left" if right_eye_horizontal_ratio > 0.5 else "Right")
-
-        behavior = "Looking Away" if left_gaze != right_gaze else "Focused"
-        return behavior
-
+            '''
+            classify_text = ''
+            if eye_features_normalized_df is not None:
+                left_iris_center_x = eye_features_normalized_df['left_iris_x'].values[0]
+                right_iris_center_x = eye_features_normalized_df['right_iris_x'].values[0]
+                left_eye_outer_corner_x = eye_features_normalized_df['left_eye_outer_corner_x'].values[0]
+                right_eye_outer_corner_x = eye_features_normalized_df['right_eye_outer_corner_x'].values[0]
+                left_diff = abs(left_iris_center_x - left_eye_outer_corner_x)
+                right_diff = abs(right_iris_center_x - right_eye_outer_corner_x)
+                
+                if left_diff < self.ratio_threshold:
+                    classify_text = 'Looking Left'
+                elif right_diff < self.ratio_threshold:
+                    classify_text = 'Looking Right'
+                else:
+                    classify_text = 'Looking Straight'
+                
+                output = {'left_diff': left_diff, 'right_diff': right_diff, 'left_iris_x': left_iris_center_x, 'right_iris_x': right_iris_center_x,'left_eye_outer_corner_x': left_eye_outer_corner_x, 'right_eye_outer_corner_x': right_eye_outer_corner_x, 'classify': classify_text}
+                logging.info(f'Eye Gaze: {output}')
+                return output
+        
     def draw_iris_circle(self, img, iris_center_landmark, surrounding_landmarks):
         """
-        Draws a circle around the iris for visualization.
+        Draws an iris circle on the given image.
 
         Parameters:
-            img: The image frame from the video capture.
-            iris_center_landmark: The center landmark of the iris.
-            surrounding_landmarks: Landmarks surrounding the iris to calculate the circle radius.
+        img (numpy.ndarray): The input image.
+        iris_center_landmark (Landmark): The landmark representing the center of the iris.
+        surrounding_landmarks (list): A list of landmarks representing the surrounding points of the iris.
 
         Returns:
-            The image with the iris circle drawn.
+        numpy.ndarray: The image with the iris circle drawn on it.
         """
+        
         center_x = int(iris_center_landmark.x * img.shape[1])
         center_y = int(iris_center_landmark.y * img.shape[0])
         center = (center_x, center_y)
 
         distances = [np.linalg.norm(np.array([landmark.x * img.shape[1], landmark.y * img.shape[0]]) - np.array(center))
-                    for landmark in surrounding_landmarks]
+                for landmark in surrounding_landmarks]
         radius = int(np.mean(distances))
 
         cv2.circle(img, center, radius, (255, 255, 0), 2)  # Yellow color for iris circle
         return img
-
-    def visualize_eye_positions(self, img, face_landmarks):
+    
+    def draw_eye_landmarks(self, img, mediapipe_result):
         """
-        Visualizes the positions of eye landmarks on the image.
+        Draws landmarks on the eyes of a face in an image.
 
-        Parameters:
-            img: The image frame from the video capture.
-            face_landmarks: The facial landmarks detected by MediaPipe.
+        Args:
+            img (numpy.ndarray): The input image.
+            mediapipe_result (mediapipe.framework.formats.landmark_pb2.NormalizedLandmarkList): The mediapipe result containing the face landmarks.
+
+        Returns:
+            numpy.ndarray: The image with eye landmarks drawn.
         """
-        # Draw landmarks for eye boundaries and irises.
-        for landmark in LEFT_EYE_BOUNDARY_LANDMARKS + LEFT_EYE_IRIS_LANDMARKS + RIGHT_EYE_BOUNDARY_LANDMARKS + RIGHT_EYE_IRIS_LANDMARKS:
-            cv2.circle(img, (int(face_landmarks.landmark[landmark].x * img.shape[1]),
-                             int(face_landmarks.landmark[landmark].y * img.shape[0])), 2, (0, 255, 0), -1)
-
-        # Draw circles around the irises for additional visualization.
-        img = self.draw_iris_circle(img, face_landmarks.landmark[468], [face_landmarks.landmark[i] for i in LEFT_EYE_IRIS_LANDMARKS])
-        img = self.draw_iris_circle(img, face_landmarks.landmark[473], [face_landmarks.landmark[i] for i in RIGHT_EYE_IRIS_LANDMARKS])
-        
-        # Additional text for debugging and visualization.
-        cv2.putText(img, f"Left eye iris: {face_landmarks.landmark[468].x:.2f}, {face_landmarks.landmark[468].y:.2f}",
-                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 3)
-        cv2.putText(img, f"Right eye iris: {face_landmarks.landmark[473].x:.2f}, {face_landmarks.landmark[473].y:.2f}",
-                    (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 3)
+        if mediapipe_result.multi_face_landmarks is not None:
+            for face_landmarks in mediapipe_result.multi_face_landmarks:
+                for landmark in LEFT_EYE_BOUNDARY_LANDMARKS + LEFT_EYE_IRIS_LANDMARKS + RIGHT_EYE_BOUNDARY_LANDMARKS + RIGHT_EYE_IRIS_LANDMARKS:
+                    cv2.circle(img, (int(face_landmarks.landmark[landmark].x * img.shape[1]), int(face_landmarks.landmark[landmark].y * img.shape[0])), 1, (0, 255, 0), -1)
+                # Draw circles around the irises for additional visualization.
+                img = self.draw_iris_circle(img, face_landmarks.landmark[468], [face_landmarks.landmark[i] for i in LEFT_EYE_IRIS_LANDMARKS])
+                img = self.draw_iris_circle(img, face_landmarks.landmark[473], [face_landmarks.landmark[i] for i in RIGHT_EYE_IRIS_LANDMARKS])
         return img
 
-    def run(self):
-        """
-        Captures video from the default camera, processes each frame to detect facial landmarks,
-        determines gaze behavior, and visualizes the results.
-        """
-        cap = cv2.VideoCapture(0)
+if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+    eye_gaze_estimator = EyeGazeEstimator()
+    face_mesh_detector = MediapipeFaceMeshDetector()
+    
+    cap = cv2.VideoCapture(0)
+    while cap.isOpened():
+        success, image = cap.read()
+        if not success:
+            logging.error("Error reading from camera, Exiting...")
+            break
+        
+        image = cv2.flip(image, 1)
+        image_h, image_w, _ = image.shape
+        
+        mediapipe_result = face_mesh_detector.detect_landmarks(image)
+        eye_features = eye_gaze_estimator.extract_eye_features(mediapipe_result)
+        if len(eye_features):
+            eye_features_df = pd.DataFrame([eye_features], columns=eye_gaze_estimator.feature_columns)
+            eye_features_normalized_df = eye_gaze_estimator.normalize(eye_features_df)
+            eye_gaze = eye_gaze_estimator.predict_eye_gaze(eye_features_normalized_df)
+            eye_gaze_estimator.draw_eye_landmarks(image, mediapipe_result)
 
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
-            frame = cv2.flip(frame, 1)
-            results = self.face_mesh.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-
-            if results.multi_face_landmarks:
-                for face_landmarks in results.multi_face_landmarks:
-                    behavior = self.detect_gaze_direction(frame, face_landmarks)
-                    cv2.putText(frame, behavior, (50, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 200), 2)
-                    frame = self.visualize_eye_positions(frame, face_landmarks)
-
-            cv2.imshow("Gaze Estimation", frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
-
-        cap.release()
-        cv2.destroyAllWindows()
-
-if __name__ == "__main__":
-    gaze_estimator = GazeEstimator()
-    gaze_estimator.run()
+            cv2.putText(image, f"Left iris X: {eye_gaze['left_iris_x']:.4f}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
+            cv2.putText(image, f"Right iris X: {eye_gaze['right_iris_x']:.4f}", (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
+            cv2.putText(image, f"Left corner X: {eye_gaze['left_eye_outer_corner_x']:.4f}", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
+            cv2.putText(image, f"Right corner X: {eye_gaze['right_eye_outer_corner_x']:.4f}", (10, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
+            cv2.putText(image, f"Left diff: {eye_gaze['left_diff']:.4f}", (10, 250), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
+            cv2.putText(image, f"Right diff: {eye_gaze['right_diff']:.4f}", (10, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
+            cv2.putText(image, f"Classify: {eye_gaze['classify']}", (10, 350), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 200), 2)
+        
+        cv2.imshow('Eye Gaze Estimation', image)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+    cap.release()
+    cv2.destroyAllWindows()

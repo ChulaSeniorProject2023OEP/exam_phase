@@ -1,3 +1,6 @@
+from tkinter import RIGHT
+
+
 NOSE_TIP_INDEX = 1  # Tip of the nose
 CHIN_INDEX = 199  # Chin
 LEFT_EYE_INDEX = 33  # Left eye
@@ -9,6 +12,13 @@ RIGHT_MOUTH_CORNER_INDEX = 291  # Right mouth corner
 UPPER_LIP_INDEX = 13  # Upper lip
 LOWER_LIP_INDEX = 14  # Lower lip
 FOREHEAD_INDEX = 10  # Forehead
+LEFT_IRIS_INDEX = 468  # Left iris
+RIGHT_IRIS_INDEX = 473  # Right iris
+LEFT_EYE_OUTER_CORNER_INDEX = 33  # Left eye outer corner
+LEFT_EYE_INNER_CORNER_INDEX = 133  # Left eye inner corner
+RIGHT_EYE_OUTER_CORNER_INDEX = 263  # Right eye outer corner
+RIGHT_EYE_INNER_CORNER_INDEX = 362  # Right eye inner corner
+
 
 LEFT_EYE_LANDMARKS = [
     33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246, 468, 469, 470, 471, 472
