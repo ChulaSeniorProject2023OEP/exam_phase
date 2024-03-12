@@ -1,6 +1,3 @@
-from tkinter import RIGHT
-
-
 NOSE_TIP_INDEX = 1  # Tip of the nose
 CHIN_INDEX = 199  # Chin
 LEFT_EYE_INDEX = 33  # Left eye
