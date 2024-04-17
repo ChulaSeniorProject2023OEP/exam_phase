@@ -105,7 +105,7 @@ class EyeGazeEstimator:
                     classify_text = 'Looking Straight'
                 
                 output = {'left_diff': left_diff, 'right_diff': right_diff, 'left_iris_x': left_iris_center_x, 'right_iris_x': right_iris_center_x,'left_eye_outer_corner_x': left_eye_outer_corner_x, 'right_eye_outer_corner_x': right_eye_outer_corner_x, 'classify': classify_text}
-                logging.info(f'Eye Gaze: {output}')
+                logging.debug(f'Eye Gaze: {output}')
                 return output
         
     def draw_iris_circle(self, img, iris_center_landmark, surrounding_landmarks):
@@ -153,7 +153,7 @@ class EyeGazeEstimator:
         return img
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(message)s')
     eye_gaze_estimator = EyeGazeEstimator()
     face_mesh_detector = MediapipeFaceMeshDetector()
     

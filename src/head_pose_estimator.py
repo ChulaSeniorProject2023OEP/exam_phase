@@ -22,7 +22,7 @@ class HeadPoseEstimator:
         feature_columns (list): Names of the feature columns for the model.
     '''
 
-    def __init__(self, model_path=DEFAULT_HEAD_POSE_MODEL_PATH, vertical_threshold=0.3, horizontal_threshold=0.5):
+    def __init__(self, model_path=DEFAULT_HEAD_POSE_MODEL_PATH, vertical_threshold=0.5, horizontal_threshold=0.5):
         '''
         Initialize the head pose estimator
         
@@ -92,7 +92,7 @@ class HeadPoseEstimator:
         pitch_pred, yaw_pred, roll_pred = self.model.predict(face_features_normalized_df).ravel()
         classify_text = self._classify_movement(pitch_pred, yaw_pred)
         output = {'pitch': pitch_pred, 'yaw': yaw_pred, 'roll': roll_pred, 'classify': classify_text}
-        logging.info(f'Head Pose: {output}')
+        logging.debug(f'Head Pose: {output}')
         return output
     
     def _classify_movement(self, pitch, yaw):
@@ -146,7 +146,7 @@ class HeadPoseEstimator:
 
 if __name__ == "__main__":
     # Configure logging
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(message)s')
     head_pose_estimator = HeadPoseEstimator()
     face_mesh_detector = MediapipeFaceMeshDetector()
     

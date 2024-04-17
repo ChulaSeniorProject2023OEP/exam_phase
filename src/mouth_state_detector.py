@@ -83,7 +83,7 @@ class MouthStateDetection:
 
 if __name__ == '__main__':
     # Configure logging
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(message)s')
     # Create a face mesh detector object
     face_mesh_detector = MediapipeFaceMeshDetector()
 
@@ -96,7 +96,7 @@ if __name__ == '__main__':
         # Read a frame from the video
         success, frame = cap.read()
         if not success:
-            logging.info("Error reading from camera, Exiting...")
+            logging.debug("Error reading from camera, Exiting...")
             break
         
         frame = cv2.flip(frame, 1)
