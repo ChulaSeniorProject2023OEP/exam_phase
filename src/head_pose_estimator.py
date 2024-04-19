@@ -147,7 +147,7 @@ class HeadPoseEstimator:
 if __name__ == "__main__":
     # Configure logging
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(message)s')
-    head_pose_estimator = HeadPoseEstimator()
+    head_pose_estimator = HeadPoseEstimator(vertical_threshold=0.21017447783173235, horizontal_threshold=0.4616627999776485)
     face_mesh_detector = MediapipeFaceMeshDetector()
     
     cap = cv2.VideoCapture(0)  # From Camera

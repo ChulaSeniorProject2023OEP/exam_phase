@@ -13,7 +13,7 @@ def initialize_logging():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
 def initialize_estimators():
-    return MediapipeFaceMeshDetector(), EyeGazeEstimator(), HeadPoseEstimator(), MouthStateDetection()
+    return MediapipeFaceMeshDetector(), EyeGazeEstimator(), HeadPoseEstimator(vertical_threshold=0.286410554975875, horizontal_threshold=0.40442384827637956), MouthStateDetection()
 
 def process_video(video_file_path, estimators):
     cap = cv2.VideoCapture(video_file_path)
@@ -98,8 +98,8 @@ def process_frame(image, frame_count, fps, face_mesh_detector, eye_gaze_estimato
             'right_diff': eye_gaze['right_diff'],
             'classify_eye_gaze': eye_gaze['classify']
         })
-        if eye_gaze['classify'] != 'Looking Straight':
-            is_cheating = 1
+        # if eye_gaze['classify'] != 'Looking Straight':
+        #     is_cheating = 1
 
     # Mouth state detection
     mouth_output = mouth_state_detector.extract_mouth_state(mediapipe_result)
@@ -130,8 +130,8 @@ def save_results(df, file_path):
 if __name__ == "__main__":
     initialize_logging()
     estimators = initialize_estimators()
-    video_file_path = '/Users/sarmkunatham/Desktop/1. Projects/GithubCodes/CU_Work/senior_project/exam_phase/data/processed/OEP_dataset/subject10/huangpi21.mp4'
-    output_file_path = '/Users/sarmkunatham/Desktop/1. Projects/GithubCodes/CU_Work/senior_project/exam_phase/reports/output/subject10.csv'
+    video_file_path = '/Users/sarmkunatham/Desktop/1. Projects/GithubCodes/CU_Work/senior_project/exam_phase/data/raw/screen staring/gritt_exam.mov'
+    output_file_path = '/Users/sarmkunatham/Desktop/1. Projects/GithubCodes/CU_Work/senior_project/exam_phase/reports/output/subject_grit.csv'
     results_df = process_video(video_file_path, estimators)
     if results_df is not None:
         print(results_df.head())

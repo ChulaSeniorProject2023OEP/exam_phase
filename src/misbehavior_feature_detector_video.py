@@ -12,11 +12,11 @@ import logging
 # Initialize the estimators
 face_mesh_detector = MediapipeFaceMeshDetector()
 eye_gaze_estimator = EyeGazeEstimator()
-head_pose_estimator = HeadPoseEstimator()
+head_pose_estimator = HeadPoseEstimator(vertical_threshold=0.286410554975875, horizontal_threshold=0.40442384827637956)
 mouth_state_detector = MouthStateDetection()
 
 # Load video from file instead of webcam
-video_file_path = '/Users/sarmkunatham/Desktop/1. Projects/GithubCodes/CU_Work/senior_project/exam_phase/data/processed/OEP_dataset/subject1/XiYin1.mp4'
+video_file_path = '/Users/sarmkunatham/Desktop/1. Projects/GithubCodes/CU_Work/senior_project/exam_phase/data/processed/OEP_dataset/subject1/Yousef1.mp4'
 cap = cv2.VideoCapture(video_file_path)
 
 # Check if video opened successfully
@@ -69,8 +69,8 @@ while cap.isOpened():
             eye_features_normalized_df = eye_gaze_estimator.normalize(eye_features_df)
             eye_gaze = eye_gaze_estimator.predict_eye_gaze(eye_features_normalized_df)
             estimations.update({'left_iris_x': eye_gaze['left_iris_x'], 'right_iris_x': eye_gaze['right_iris_x'], 'left_eye_outer_corner_x': eye_gaze['left_eye_outer_corner_x'], 'right_eye_outer_corner_x': eye_gaze['right_eye_outer_corner_x'], 'left_diff': eye_gaze['left_diff'], 'right_diff': eye_gaze['right_diff'], 'classify_eye_gaze': eye_gaze['classify']})
-            if eye_gaze['classify'] != 'Looking Straight':
-                is_cheating = 1
+            # if eye_gaze['classify'] != 'Looking Straight':
+            #     is_cheating = 1
 
         # Mouth state detection
         mouth_output = mouth_state_detector.extract_mouth_state(mediapipe_result)
@@ -93,5 +93,5 @@ cap.release()
 cv2.destroyAllWindows()
 
 # Optionally, save the DataFrame to a CSV file
-results_df.to_csv('/Users/sarmkunatham/Desktop/1. Projects/GithubCodes/CU_Work/senior_project/exam_phase/reports/estimations/subject1.csv', index=False)
+results_df.to_csv('/Users/sarmkunatham/Desktop/1. Projects/GithubCodes/CU_Work/senior_project/exam_phase/reports/estimations/new_subject1.csv', index=False)
 print(results_df)

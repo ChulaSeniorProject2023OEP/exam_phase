@@ -91,7 +91,9 @@ class EyeGazeEstimator:
             classify_text = ''
             if eye_features_normalized_df is not None:
                 left_iris_center_x = eye_features_normalized_df['left_iris_x'].values[0]
+                left_iris_center_y = eye_features_normalized_df['left_iris_y'].values[0]
                 right_iris_center_x = eye_features_normalized_df['right_iris_x'].values[0]
+                right_iris_center_y = eye_features_normalized_df['right_iris_y'].values[0]
                 left_eye_outer_corner_x = eye_features_normalized_df['left_eye_outer_corner_x'].values[0]
                 right_eye_outer_corner_x = eye_features_normalized_df['right_eye_outer_corner_x'].values[0]
                 left_diff = abs(left_iris_center_x - left_eye_outer_corner_x)
@@ -104,7 +106,7 @@ class EyeGazeEstimator:
                 else:
                     classify_text = 'Looking Straight'
                 
-                output = {'left_diff': left_diff, 'right_diff': right_diff, 'left_iris_x': left_iris_center_x, 'right_iris_x': right_iris_center_x,'left_eye_outer_corner_x': left_eye_outer_corner_x, 'right_eye_outer_corner_x': right_eye_outer_corner_x, 'classify': classify_text}
+                output = {'left_diff': left_diff, 'right_diff': right_diff, 'left_iris_x': left_iris_center_x, 'right_iris_x': right_iris_center_x,'left_eye_outer_corner_x': left_eye_outer_corner_x, 'right_eye_outer_corner_x': right_eye_outer_corner_x, 'left_iris_center_y': left_iris_center_y, 'right_iris_center_y': right_iris_center_y, 'classify': classify_text}
                 logging.debug(f'Eye Gaze: {output}')
                 return output
         
@@ -182,6 +184,8 @@ if __name__ == '__main__':
             cv2.putText(image, f"Left diff: {eye_gaze['left_diff']:.4f}", (10, 250), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
             cv2.putText(image, f"Right diff: {eye_gaze['right_diff']:.4f}", (10, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
             cv2.putText(image, f"Classify: {eye_gaze['classify']}", (10, 350), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 200), 2)
+            cv2.putText(image, f"Left iris Y: {eye_gaze['left_iris_center_y']:.4f}", (10, 400), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
+            cv2.putText(image, f"Right iris Y: {eye_gaze['right_iris_center_y']:.4f}", (10, 450), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
         
         cv2.imshow('Eye Gaze Estimation', image)
         if cv2.waitKey(1) & 0xFF == ord('q'):

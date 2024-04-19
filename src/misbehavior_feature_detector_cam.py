@@ -59,7 +59,7 @@ while cap.isOpened():
     output = mouth_state_detector.extract_mouth_state(mediapipe_result)
     # Display the mouth state on the frame
     cv2.putText(image, output["classify"], (10, 600), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-    cv2.putText(image, f'Mouth Opening Distance: {output["mouth_opening_distance"]:.2f}', (10, 650), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+    cv2.putText(image, f'Mouth Opening Distance: {output["mouth_opening_distance"]:.5f}', (10, 650), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
     cv2.imshow('Misbehavior Detection', image)
     if cv2.waitKey(1) & 0xFF == ord('q'):

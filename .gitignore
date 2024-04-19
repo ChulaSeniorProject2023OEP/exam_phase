@@ -168,3 +168,8 @@ OEP_database/
 *AFLW2000/
 dataset/*
 data/*
+*.zip
+*.jpg
+*.csv
+*notebooks/headpose
+*notebooks/mouth
