@@ -2,15 +2,16 @@ import cv2
 import numpy as np
 import logging
 import pandas as pd
+import math
 
 from mediapipe_face_mesh_detector import MediapipeFaceMeshDetector
-from constants import LEFT_EYE_BOUNDARY_LANDMARKS, LEFT_EYE_IRIS_LANDMARKS, LEFT_EYE_OUTER_CORNER_INDEX, LEFT_IRIS_INDEX, NOSE_TIP_INDEX, RIGHT_EYE_BOUNDARY_LANDMARKS, RIGHT_EYE_IRIS_LANDMARKS, RIGHT_EYE_OUTER_CORNER_INDEX, RIGHT_IRIS_INDEX
+from constants import LEFT_EYE_BOUNDARY_LANDMARKS, LEFT_EYE_IRIS_LANDMARKS, LEFT_EYE_OUTER_CORNER_INDEX, LEFT_IRIS_INDEX, NOSE_TIP_INDEX, RIGHT_EYE_BOUNDARY_LANDMARKS, RIGHT_EYE_IRIS_LANDMARKS, RIGHT_EYE_OUTER_CORNER_INDEX, RIGHT_IRIS_INDEX, LEFT_EYE, RIGHT_EYE, BLACK, GREEN, YELLOW, PINK, GRAY
 
 class EyeGazeEstimator:
     """
     Class for estimating eye gaze direction using facial landmarks provided by MediaPipe.
     """
-    def __init__(self, ratio_threshold=0.35):
+    def __init__(self, ratio_threshold=0.30):
         """
         Initializes the EyeGazeEstimator.
 
@@ -21,6 +22,7 @@ class EyeGazeEstimator:
         self.ratio_threshold = ratio_threshold
         self.feature_columns = [f"{pos}{dim}" for pos in ['nose_', 'left_iris_', 'right_iris_', 'left_eye_outer_corner_', 'right_eye_outer_corner_'] 
                                 for dim in ['x', 'y']]
+        self.last_prediction = None  # Stores the last valid prediction
     
     def extract_eye_features(self, mediapipe_result):
         """
@@ -35,6 +37,12 @@ class EyeGazeEstimator:
         eye_features = []
         if mediapipe_result.multi_face_landmarks is not None:
             for face_landmarks in mediapipe_result.multi_face_landmarks:
+                mesh_coords = np.array([(lm.x, lm.y) for lm in face_landmarks.landmark])
+                blinkRatio = self.blinkRatio(mesh_coords, RIGHT_EYE, LEFT_EYE)
+                if blinkRatio > 5.5:
+                    logging.debug(f'Blink Detected with ratio: {blinkRatio}')
+                    return None  # Return None to indicate a blink and skip processing
+                
                 for idx, lm in enumerate(face_landmarks.landmark):
                     if idx in [NOSE_TIP_INDEX, LEFT_IRIS_INDEX, RIGHT_IRIS_INDEX, LEFT_EYE_OUTER_CORNER_INDEX, RIGHT_EYE_OUTER_CORNER_INDEX]:
                         eye_features.append(lm.x)
@@ -108,6 +116,7 @@ class EyeGazeEstimator:
                 
                 output = {'left_diff': left_diff, 'right_diff': right_diff, 'left_iris_x': left_iris_center_x, 'right_iris_x': right_iris_center_x,'left_eye_outer_corner_x': left_eye_outer_corner_x, 'right_eye_outer_corner_x': right_eye_outer_corner_x, 'left_iris_center_y': left_iris_center_y, 'right_iris_center_y': right_iris_center_y, 'classify': classify_text}
                 logging.debug(f'Eye Gaze: {output}')
+                self.last_prediction = output
                 return output
         
     def draw_iris_circle(self, img, iris_center_landmark, surrounding_landmarks):
@@ -153,6 +162,43 @@ class EyeGazeEstimator:
                 img = self.draw_iris_circle(img, face_landmarks.landmark[468], [face_landmarks.landmark[i] for i in LEFT_EYE_IRIS_LANDMARKS])
                 img = self.draw_iris_circle(img, face_landmarks.landmark[473], [face_landmarks.landmark[i] for i in RIGHT_EYE_IRIS_LANDMARKS])
         return img
+    
+    # Euclaidean distance 
+    def euclaideanDistance(self, point, point1):
+        x, y = point
+        x1, y1 = point1
+        distance = math.sqrt((x1 - x)**2 + (y1 - y)**2)
+        return distance
+    
+    def blinkRatio(self,landmarks, right_indices, left_indices):
+        # Right eyes 
+        # horizontal line 
+        rh_right = landmarks[right_indices[0]]
+        rh_left = landmarks[right_indices[8]]
+        # vertical line 
+        rv_top = landmarks[right_indices[12]]
+        rv_bottom = landmarks[right_indices[4]]
+
+        # LEFT_EYE 
+        # horizontal line 
+        lh_right = landmarks[left_indices[0]]
+        lh_left = landmarks[left_indices[8]]
+
+        # vertical line 
+        lv_top = landmarks[left_indices[12]]
+        lv_bottom = landmarks[left_indices[4]]
+
+        rhDistance = self.euclaideanDistance(rh_right, rh_left)
+        rvDistance = self.euclaideanDistance(rv_top, rv_bottom)
+
+        lvDistance = self.euclaideanDistance(lv_top, lv_bottom)
+        lhDistance = self.euclaideanDistance(lh_right, lh_left)
+
+        reRatio = rhDistance/rvDistance
+        leRatio = lhDistance/lvDistance
+
+        ratio = (reRatio+leRatio)/2
+        return ratio 
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -171,12 +217,11 @@ if __name__ == '__main__':
         
         mediapipe_result = face_mesh_detector.detect_landmarks(image)
         eye_features = eye_gaze_estimator.extract_eye_features(mediapipe_result)
-        if len(eye_features):
+        if eye_features:
             eye_features_df = pd.DataFrame([eye_features], columns=eye_gaze_estimator.feature_columns)
             eye_features_normalized_df = eye_gaze_estimator.normalize(eye_features_df)
             eye_gaze = eye_gaze_estimator.predict_eye_gaze(eye_features_normalized_df)
             eye_gaze_estimator.draw_eye_landmarks(image, mediapipe_result)
-
             cv2.putText(image, f"Left iris X: {eye_gaze['left_iris_x']:.4f}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
             cv2.putText(image, f"Right iris X: {eye_gaze['right_iris_x']:.4f}", (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
             cv2.putText(image, f"Left corner X: {eye_gaze['left_eye_outer_corner_x']:.4f}", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
@@ -186,6 +231,21 @@ if __name__ == '__main__':
             cv2.putText(image, f"Classify: {eye_gaze['classify']}", (10, 350), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 200), 2)
             cv2.putText(image, f"Left iris Y: {eye_gaze['left_iris_center_y']:.4f}", (10, 400), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
             cv2.putText(image, f"Right iris Y: {eye_gaze['right_iris_center_y']:.4f}", (10, 450), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
+        
+        else:
+            eye_gaze = eye_gaze_estimator.last_prediction
+            if eye_gaze:
+                cv2.putText(image, f"Left iris X: {eye_gaze['left_iris_x']:.4f}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
+                cv2.putText(image, f"Right iris X: {eye_gaze['right_iris_x']:.4f}", (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
+                cv2.putText(image, f"Left corner X: {eye_gaze['left_eye_outer_corner_x']:.4f}", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
+                cv2.putText(image, f"Right corner X: {eye_gaze['right_eye_outer_corner_x']:.4f}", (10, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
+                cv2.putText(image, f"Left diff: {eye_gaze['left_diff']:.4f}", (10, 250), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
+                cv2.putText(image, f"Right diff: {eye_gaze['right_diff']:.4f}", (10, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
+                cv2.putText(image, f"Classify: {eye_gaze['classify']}", (10, 350), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 200), 2)
+                cv2.putText(image, f"Left iris Y: {eye_gaze['left_iris_center_y']:.4f}", (10, 400), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
+                cv2.putText(image, f"Right iris Y: {eye_gaze['right_iris_center_y']:.4f}", (10, 450), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 200), 2)
+
+        
         
         cv2.imshow('Eye Gaze Estimation', image)
         if cv2.waitKey(1) & 0xFF == ord('q'):

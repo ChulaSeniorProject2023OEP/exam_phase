@@ -15,6 +15,13 @@ LEFT_EYE_OUTER_CORNER_INDEX = 33  # Left eye outer corner
 LEFT_EYE_INNER_CORNER_INDEX = 133  # Left eye inner corner
 RIGHT_EYE_OUTER_CORNER_INDEX = 263  # Right eye outer corner
 RIGHT_EYE_INNER_CORNER_INDEX = 362  # Right eye inner corner
+# Left eyes indices 
+LEFT_EYE =[ 362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385,384, 398 ]
+LEFT_EYEBROW =[ 336, 296, 334, 293, 300, 276, 283, 282, 295, 285 ]
+
+# right eyes indices
+RIGHT_EYE=[ 33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161 , 246 ]  
+RIGHT_EYEBROW=[ 70, 63, 105, 66, 107, 55, 65, 52, 53, 46 ]
 
 
 LEFT_EYE_LANDMARKS = [
@@ -34,3 +41,18 @@ RIGHT_EYE_IRIS_LANDMARKS = [
 RIGHT_EYE_BOUNDARY_LANDMARKS = list(set(RIGHT_EYE_LANDMARKS) - set(RIGHT_EYE_IRIS_LANDMARKS))
 
 DEFAULT_HEAD_POSE_MODEL_PATH = 'src/models/head_pose_model/LGBM_finetune_v_optuna.pkl'
+
+# colors 
+# values =(blue, green, red) opencv accepts BGR values not RGB
+BLACK = (0,0,0)
+WHITE = (255,255,255)
+BLUE = (255,0,0)
+RED = (0,0,255)
+CYAN = (255,255,0)
+YELLOW =(0,255,255)
+MAGENTA = (255,0,255)
+GRAY = (128,128,128)
+GREEN = (0,255,0)
+PURPLE = (128,0,128)
+ORANGE = (0,165,255)
+PINK = (147,20,255)
